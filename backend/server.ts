@@ -5,6 +5,8 @@ import { createUser, findUserByEmail, updateUserRefreshToken } from "./db";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import { requireAuth } from "./jwt";
+import path from "path";
+import { readFileSync } from "fs";
 
 dotenv.config();
 const app = express();
@@ -20,6 +22,15 @@ app.use(
 
 app.get("/", (req, res) => {
   res.send("ok");
+});
+
+app.get("/plugin-ui", (req, res) => {
+  const pluginUiHtml = readFileSync(
+    path.join(__dirname, "plugin-ui.html"),
+    "utf-8",
+  );
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(pluginUiHtml);
 });
 
 app.get("/me", requireAuth, (req, res) => {

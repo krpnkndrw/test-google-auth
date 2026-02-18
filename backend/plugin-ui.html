@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Sign in</title>
+  </head>
+  <body>
+    <div id="root">
+      <button id="sendMessage">Отправить сообщение в плагин</button>
+    </div>
+    <script>
+      function sendTokenToMain(token) {
+        console.log("sendTokenToMain", token);
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: "saveToken",
+              token: token,
+            },
+          },
+          "*",
+        );
+      }
+      document.getElementById("sendMessage").onclick = () =>
+        sendTokenToMain("test-123");
+    </script>
+  </body>
+</html>
