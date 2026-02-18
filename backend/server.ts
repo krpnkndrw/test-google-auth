@@ -118,27 +118,7 @@ app.get("/plugin/auth", (req, res) => {
     process.env.GOOGLE_REDIRECT_URI_PLUGIN!,
     state,
   );
-
-  const pluginAuthPage = `<!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Authentication</title>
-        </head>
-        <body>
-          <div id="root">
-            <button id="singIn">Continue</button>
-          </div>
-          <script>
-            document.getElementById("singIn").onclick = () => {
-              window.location.href = "${googleAuthUrl}";
-            };
-          </script>
-        </body>
-      </html>`;
-
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send(pluginAuthPage);
+  res.redirect(302, googleAuthUrl);
 });
 
 app.get("/plugin/callback", async (req, res) => {
@@ -168,15 +148,13 @@ app.get("/plugin/callback", async (req, res) => {
       return res.status(400);
     }
 
-    const html = `<!doctype html>
-<html>
-  <head><meta charset="utf-8"><title>Authentication</title></head>
-  <body>
-    <p>Authentication complete. You can close this window and switch back to Figma.</p>
-  </body>
-</html>`;
+    const successHtml = readFileSync(
+      path.join(__dirname, "success_auth.html"),
+      "utf-8",
+    );
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(html);
+    res.send(successHtml);
   } catch (error) {
     console.error(error);
     res.status(500).send("Authentication failed");
