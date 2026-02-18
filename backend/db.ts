@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 
-const dbPath = path.join(__dirname, "database.sqlite");
+const dbPath = path.resolve(__dirname, "database.sqlite");
 const db = new Database(dbPath);
 
 db.exec(`
@@ -13,6 +13,17 @@ db.exec(`
     updated_at TEXT NOT NULL
   )
 `);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS plugin_auth_keys (
+    read_key TEXT PRIMARY KEY,
+    write_key TEXT NOT NULL UNIQUE,
+    value TEXT,
+    created_at INTEGER NOT NULL
+  )
+`);
+
+export { db };
 
 export interface User {
   id: number;
@@ -27,11 +38,6 @@ export function findUserByEmail(email: string): User | undefined {
   return stmt.get(email) as User | undefined;
 }
 
-export function findUserById(id: number): User | undefined {
-  const stmt = db.prepare("SELECT * FROM users WHERE id = ?");
-  return stmt.get(id) as User | undefined;
-}
-
 export function createUser(data: {
   email: string;
   google_refresh_token: string;
@@ -41,7 +47,7 @@ export function createUser(data: {
     INSERT INTO users (email, google_refresh_token, created_at, updated_at)
     VALUES (?, ?, ?, ?)
   `);
-  const result = stmt.run(data.email, data.google_refresh_token, now, now);
+  stmt.run(data.email, data.google_refresh_token, now, now);
   return findUserByEmail(data.email)!;
 }
 

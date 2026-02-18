@@ -1,4 +1,5 @@
-const pluginUiUrl = "http://localhost:3000/plugin-ui";
+const pluginUiUrl = "http://localhost:3000/plugin/ui";
+const pluginOrigin = "http://localhost:3000";
 
 const parentHtml = `<!DOCTYPE html>
 <html>
@@ -8,14 +9,27 @@ const parentHtml = `<!DOCTYPE html>
 </body>
 <script>
   window.addEventListener('message', (event) => {
-  console.log('plugin iframe', event.data.pluginMessage)
-  window.parent.postMessage({ pluginMessage: event.data.pluginMessage }, "*")
-})
+    if (event.data && event.data.pluginMessage) {
+      window.parent.postMessage({ pluginMessage: event.data.pluginMessage }, "https://www.figma.com");
+    }
+  });
 </script>
 </html>`;
 
 figma.showUI(parentHtml, { width: 400, height: 500 });
 
-figma.ui.onmessage = (event) => {
-  console.log("plugin", event);
+(async () => {
+  const token = await figma.clientStorage.getAsync("my-token");
+  if (token) {
+    figma.ui.postMessage({ type: "token", token }, { origin: pluginOrigin });
+  }
+})();
+
+figma.ui.onmessage = (msg: { type?: string; token?: string }) => {
+  if (msg.type === "saveToken" && msg.token) {
+    figma.clientStorage.setAsync("my-token", msg.token);
+  }
+  if (msg.type === "logout") {
+    figma.clientStorage.deleteAsync("my-token");
+  }
 };

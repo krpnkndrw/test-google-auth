@@ -6,23 +6,127 @@
   </head>
   <body>
     <div id="root">
-      <button id="sendMessage">Отправить сообщение в плагин</button>
+      <div id="status">Загрузка…</div>
+      <button id="btnSignIn" style="display: none">Войти</button>
+      <button id="btnLogout" style="display: none">Выйти</button>
     </div>
     <script>
-      function sendTokenToMain(token) {
-        console.log("sendTokenToMain", token);
-        parent.postMessage(
+      const FIGMA_ORIGIN = "https://www.figma.com";
+      const PLUGIN_ID = "1605922465230974720";
+
+      let token = null;
+      const apiBase = window.location.origin;
+
+      const statusEl = document.getElementById("status");
+      const btnSignIn = document.getElementById("btnSignIn");
+      const btnLogout = document.getElementById("btnLogout");
+
+      function sendTokenToMain(t) {
+        token = t;
+        updateUI();
+        window.parent.postMessage(
           {
             pluginMessage: {
               type: "saveToken",
-              token: token,
+              token: t,
+              pluginId: PLUGIN_ID,
             },
           },
-          "*",
+          FIGMA_ORIGIN,
         );
       }
-      document.getElementById("sendMessage").onclick = () =>
-        sendTokenToMain("test-123");
+
+      function updateUI() {
+        if (token) {
+          statusEl.textContent = "Вы авторизованы.";
+          btnSignIn.style.display = "none";
+          btnLogout.style.display = "inline-block";
+        } else {
+          statusEl.textContent = "Войдите через Google.";
+          btnSignIn.style.display = "inline-block";
+          btnLogout.style.display = "none";
+        }
+      }
+
+      window.addEventListener("message", (event) => {
+        const msg = event.data?.pluginMessage;
+        if (!msg) return;
+        if (msg.type === "token" && msg.token) {
+          token = msg.token;
+          updateUI();
+        }
+      });
+
+      btnSignIn.onclick = async () => {
+        statusEl.textContent = "Открытие окна входа…";
+        let readKey = null;
+        try {
+          const r = await fetch(apiBase + "/plugin/keys", { method: "POST" });
+          if (!r.ok) throw new Error("Не удалось получить ключи");
+          const { readKey: rk, authUrl } = await r.json();
+          readKey = rk;
+          window.open(
+            authUrl,
+            "_blank",
+            "width=420,height=520,scrollbars=yes,menubar=no,toolbar=no",
+          );
+        } catch (e) {
+          statusEl.textContent = "Ошибка: " + (e.message || "сеть");
+          updateUI();
+          return;
+        }
+
+        statusEl.textContent =
+          "Ожидание входа… Залогиньтесь в открывшемся окне.";
+        const pollInterval = setInterval(async () => {
+          try {
+            const r = await fetch(
+              apiBase + "/auth/poll?readKey=" + encodeURIComponent(readKey),
+            );
+            if (r.status === 204 || r.status === 404) return;
+            if (!r.ok) throw new Error("Ошибка polling");
+            const data = await r.json();
+            if (data.token) {
+              clearInterval(pollInterval);
+              sendTokenToMain(data.token);
+              statusEl.textContent = "Готово. Можно закрыть окно входа.";
+            }
+          } catch (e) {
+            console.error("poll error", e);
+          }
+        }, 1500);
+
+        setTimeout(
+          () => {
+            clearInterval(pollInterval);
+            if (!token) {
+              statusEl.textContent = "Войдите через Google.";
+              updateUI();
+            }
+          },
+          10 * 60 * 1000,
+        );
+      };
+
+      btnLogout.onclick = () => {
+        token = null;
+        updateUI();
+        window.parent.postMessage(
+          {
+            pluginMessage: {
+              type: "logout",
+              pluginId: PLUGIN_ID,
+            },
+          },
+          FIGMA_ORIGIN,
+        );
+      };
+
+      statusEl.textContent = "Загрузка…";
+      setTimeout(() => {
+        if (!token) statusEl.textContent = "Войдите через Google.";
+        updateUI();
+      }, 300);
     </script>
   </body>
 </html>
