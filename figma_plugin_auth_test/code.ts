@@ -16,14 +16,14 @@ const parentHtml = `<!DOCTYPE html>
 </script>
 </html>`;
 
-figma.showUI(parentHtml, { width: 400, height: 500 });
-
 (async () => {
   const token = await figma.clientStorage.getAsync("my-token");
   if (token) {
     figma.ui.postMessage({ type: "token", token }, { origin: pluginOrigin });
   }
 })();
+
+figma.showUI(parentHtml, { width: 400, height: 500 });
 
 figma.ui.onmessage = (msg: { type?: string; token?: string }) => {
   if (msg.type === "saveToken" && msg.token) {

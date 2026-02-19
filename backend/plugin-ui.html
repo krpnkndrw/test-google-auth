@@ -60,10 +60,11 @@
       btnSignIn.onclick = async () => {
         statusEl.textContent = "Открытие окна входа…";
         let readKey = null;
+
         try {
-          const r = await fetch(apiBase + "/plugin/keys", { method: "POST" });
-          if (!r.ok) throw new Error("Не удалось получить ключи");
-          const { readKey: rk, authUrl } = await r.json();
+          const res = await fetch(apiBase + "/plugin/keys", { method: "POST" });
+          if (!res.ok) throw new Error("Не удалось получить ключи");
+          const { readKey: rk, authUrl } = await res.json();
           readKey = rk;
           window.open(authUrl, "_blank");
         } catch (e) {
@@ -76,12 +77,12 @@
           "Ожидание входа… Залогиньтесь в открывшемся окне.";
         const pollInterval = setInterval(async () => {
           try {
-            const r = await fetch(
+            const res = await fetch(
               apiBase + "/auth/poll?readKey=" + encodeURIComponent(readKey),
             );
-            if (r.status === 204 || r.status === 404) return;
-            if (!r.ok) throw new Error("Ошибка polling");
-            const data = await r.json();
+            if (res.status === 204 || res.status === 404) return;
+            if (!res.ok) throw new Error("Ошибка polling");
+            const data = await res.json();
             if (data.token) {
               clearInterval(pollInterval);
               sendTokenToMain(data.token);
