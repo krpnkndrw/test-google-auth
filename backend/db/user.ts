@@ -1,4 +1,5 @@
 import { db } from "./db";
+import jwt from "jsonwebtoken";
 
 export interface User {
   id: number;
