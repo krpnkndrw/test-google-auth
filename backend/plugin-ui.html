@@ -9,6 +9,7 @@
       <div id="status">Загрузка…</div>
       <button id="btnSignIn" style="display: none">Войти</button>
       <button id="btnLogout" style="display: none">Выйти</button>
+      <button id="btnMe" style="display: none">Юзер</button>
     </div>
     <script>
       const FIGMA_ORIGIN = "https://www.figma.com";
@@ -20,10 +21,12 @@
       const statusEl = document.getElementById("status");
       const btnSignIn = document.getElementById("btnSignIn");
       const btnLogout = document.getElementById("btnLogout");
+      const btnMe = document.getElementById("btnMe");
 
       function sendTokenToMain(t) {
         token = t;
         updateUI();
+        console.log("отправляю токен в плагин");
         window.parent.postMessage(
           {
             pluginMessage: {
@@ -41,17 +44,20 @@
           statusEl.textContent = "Вы авторизованы.";
           btnSignIn.style.display = "none";
           btnLogout.style.display = "inline-block";
+          btnMe.style.display = "inline-block";
         } else {
           statusEl.textContent = "Войдите через Google.";
           btnSignIn.style.display = "inline-block";
           btnLogout.style.display = "none";
+          btnMe.style.display = "none";
         }
       }
 
       window.addEventListener("message", (event) => {
-        const msg = event.data?.pluginMessage;
+        const msg = event.data?.fromFigma;
         if (!msg) return;
         if (msg.type === "token" && msg.token) {
+          console.log("Получил токен от плагина");
           token = msg.token;
           updateUI();
         }
@@ -83,6 +89,7 @@
             if (res.status === 204 || res.status === 404) return;
             if (!res.ok) throw new Error("Ошибка polling");
             const data = await res.json();
+            console.log("auth/poll", data);
             if (data.token) {
               clearInterval(pollInterval);
               sendTokenToMain(data.token);
@@ -119,7 +126,18 @@
         );
       };
 
+      btnMe.onclick = async () => {
+        const response = await fetch(apiBase + "/plugin/me", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json();
+        statusEl.textContent = "Юзер: " + data.email;
+      };
       statusEl.textContent = "Загрузка…";
+
       setTimeout(() => {
         if (!token) statusEl.textContent = "Войдите через Google.";
         updateUI();

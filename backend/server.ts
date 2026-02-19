@@ -1,12 +1,13 @@
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import { exchangeCodeAndSign } from "./db/user";
+import { exchangeCodeAndSign, findUserById } from "./db/user";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { readFileSync } from "fs";
 import { createKeyPair, writeByWriteKey, readByReadKey } from "./db/keystorage";
 import { buildGoogleAuthUrl, cookieOpts } from "./utils";
+import { AuthedRequest, pluginAuthMiddleware } from "./authMiddleware";
 
 dotenv.config();
 const app = express();
@@ -123,6 +124,14 @@ app.get("/auth/poll", (req, res) => {
     res.status(500).json({ error: "Invalid stored value" });
   }
 });
+
+app.get(
+  "/plugin/me",
+  pluginAuthMiddleware,
+  (req: AuthedRequest, res: express.Response) => {
+    res.json({ email: req.user!.email });
+  },
+);
 
 app.listen(port, () => {
   console.log(`Listening ${port}`);

@@ -8,25 +8,31 @@ const parentHtml = `<!DOCTYPE html>
   <iframe src="${pluginUiUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"></iframe>
 </body>
 <script>
+  const iframe = document.querySelector('iframe')
   window.addEventListener('message', (event) => {
+    console.log('parentHtml', event);
     if (event.data && event.data.pluginMessage) {
       window.parent.postMessage({ pluginMessage: event.data.pluginMessage }, "https://www.figma.com");
+      iframe.contentWindow.postMessage({ fromFigma: event.data.pluginMessage }, "${pluginOrigin}");
     }
   });
 </script>
 </html>`;
 
+figma.showUI(parentHtml, { width: 400, height: 500 });
+
 (async () => {
   const token = await figma.clientStorage.getAsync("my-token");
+  console.log("Получил токен из figma.clientStorage");
   if (token) {
-    figma.ui.postMessage({ type: "token", token }, { origin: pluginOrigin });
+    figma.ui.postMessage({ type: "token", token });
   }
 })();
 
-figma.showUI(parentHtml, { width: 400, height: 500 });
-
 figma.ui.onmessage = (msg: { type?: string; token?: string }) => {
+  console.log("figma.ui.onmessage", msg.type);
   if (msg.type === "saveToken" && msg.token) {
+    console.log("получаю токен в плагине и ставлю его в figma.clientStorage");
     figma.clientStorage.setAsync("my-token", msg.token);
   }
   if (msg.type === "logout") {

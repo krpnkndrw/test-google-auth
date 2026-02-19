@@ -14,6 +14,11 @@ export function findUserByEmail(email: string): User | undefined {
   return stmt.get(email) as User | undefined;
 }
 
+export function findUserById(id: number): User | undefined {
+  const stmt = db.prepare("SELECT * FROM users WHERE id = ?");
+  return stmt.get(id) as User | undefined;
+}
+
 export function createUser(data: {
   email: string;
   google_refresh_token: string;
