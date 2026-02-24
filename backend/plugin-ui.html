@@ -37,7 +37,7 @@
               pluginId: PLUGIN_ID,
             },
           },
-          FIGMA_ORIGIN,
+          process.env.BACKEND_URL,
         );
       }
 
@@ -121,7 +121,8 @@
           return;
         }
 
-        statusEl.textContent = "Ожидание входа… Залогиньтесь в открывшемся окне.";
+        statusEl.textContent =
+          "Ожидание входа… Залогиньтесь в открывшемся окне.";
         const pollInterval = setInterval(async () => {
           try {
             const res = await fetch(
@@ -144,13 +145,16 @@
           }
         }, 1500);
 
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          if (!accessToken) {
-            statusEl.textContent = "Войдите через Google.";
-            updateUI();
-          }
-        }, 10 * 60 * 1000);
+        setTimeout(
+          () => {
+            clearInterval(pollInterval);
+            if (!accessToken) {
+              statusEl.textContent = "Войдите через Google.";
+              updateUI();
+            }
+          },
+          10 * 60 * 1000,
+        );
       };
 
       btnLogout.onclick = async () => {

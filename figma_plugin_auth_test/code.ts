@@ -20,7 +20,7 @@ const parentHtml = `<!DOCTYPE html>
       iframe.contentWindow.postMessage({ fromFigma: event.data.pluginMessage }, PLUGIN_ORIGIN);
     }
   });
-<\/script>
+</script>
 </html>`;
 
 figma.showUI(parentHtml, { width: 400, height: 500 });

@@ -1,4 +1,7 @@
 import dotenv from "dotenv";
+
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -12,8 +15,6 @@ import { findAndConsumeRefreshToken, saveRefreshToken } from "./db/refreshToken"
 import { cookieOpts } from "./utils";
 import "./passport/googleStrategy";
 import "./passport/jwtStrategy";
-
-dotenv.config();
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
@@ -59,7 +60,7 @@ app.get("/plugin/auth", (req, res, next) => {
   }
   res.cookie("oauth_write_key", writeKey, cookieOpts);
   passport.authenticate("google", {
-    scope: ["email"],
+    scope: ["profile", "email"],
     session: false,
   })(req, res, next);
 });
@@ -71,7 +72,10 @@ app.get("/plugin/callback", (req, res, next) => {
     { session: false },
     (err: Error | null, tokens: { accessToken: string; refreshToken: string } | false) => {
       if (err || !tokens) {
-        console.error("Auth error:", err);
+        console.error("Auth error:", err?.message ?? err);
+        if (!tokens && !err) {
+          console.error("Auth failed: no tokens (possible state/cookie mismatch). Cookie present:", !!req.cookies?.oauth_write_key, "query.state:", !!req.query.state);
+        }
         return res.status(500).send("Authentication failed");
       }
 
