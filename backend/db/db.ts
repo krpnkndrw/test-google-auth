@@ -23,4 +23,13 @@ db.exec(`
   )
 `);
 
+try {
+  db.exec(`ALTER TABLE plugin_auth_keys ADD COLUMN code_verifier TEXT`);
+} catch (err) {
+  if (!(err instanceof Error && err.message.includes("duplicate column name"))) {
+    throw err;
+  }
+  // column already exists — ok
+}
+
 export { db };

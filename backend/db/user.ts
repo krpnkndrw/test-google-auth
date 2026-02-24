@@ -48,6 +48,7 @@ export function updateUserRefreshToken(
 export async function exchangeCodeAndSign(
   code: string,
   redirectUri: string,
+  codeVerifier: string,
 ): Promise<{ token: string }> {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -55,6 +56,7 @@ export async function exchangeCodeAndSign(
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
     code,
+    code_verifier: codeVerifier,
   });
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",

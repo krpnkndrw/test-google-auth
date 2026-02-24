@@ -12,6 +12,13 @@
       <button id="btnMe" style="display: none">Юзер</button>
     </div>
     <script>
+      async function generateCodeVerifier() {
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        return btoa(String.fromCharCode(...array))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      }
+
       const FIGMA_ORIGIN = "https://www.figma.com";
       const PLUGIN_ID = "1605922465230974720";
 
@@ -68,7 +75,12 @@
         let readKey = null;
 
         try {
-          const res = await fetch(apiBase + "/plugin/keys", { method: "POST" });
+          const codeVerifier = await generateCodeVerifier();
+          const res = await fetch(apiBase + "/plugin/keys", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ codeVerifier }),
+          });
           if (!res.ok) throw new Error("Не удалось получить ключи");
           const { readKey: rk, authUrl } = await res.json();
           readKey = rk;
@@ -84,12 +96,11 @@
         const pollInterval = setInterval(async () => {
           try {
             const res = await fetch(
-              apiBase + "/auth/poll?readKey=" + encodeURIComponent(readKey),
+              apiBase + "/plugin/poll?readKey=" + encodeURIComponent(readKey),
             );
             if (res.status === 204 || res.status === 404) return;
             if (!res.ok) throw new Error("Ошибка polling");
             const data = await res.json();
-            console.log("auth/poll", data);
             if (data.token) {
               clearInterval(pollInterval);
               sendTokenToMain(data.token);
