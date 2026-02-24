@@ -4,21 +4,25 @@ import path from "path";
 const dbPath = path.resolve(__dirname, "database.sqlite");
 const db = new Database(dbPath);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL UNIQUE,
-    google_refresh_token TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  )
-`);
+// Удалить старую таблицу users (данные не нужны)
+db.exec(`DROP TABLE IF EXISTS users`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS plugin_auth_keys (
     read_key TEXT PRIMARY KEY,
     write_key TEXT NOT NULL UNIQUE,
+    code_verifier TEXT,
     value TEXT,
+    created_at INTEGER NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    expires_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL
   )
 `);
@@ -29,7 +33,6 @@ try {
   if (!(err instanceof Error && err.message.includes("duplicate column name"))) {
     throw err;
   }
-  // column already exists — ok
 }
 
 export { db };

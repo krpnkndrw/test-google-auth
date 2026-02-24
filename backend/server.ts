@@ -1,14 +1,17 @@
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import { exchangeCodeAndSign, findUserById } from "./db/user";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { readFileSync } from "fs";
-import { createKeyPair, writeByWriteKey, readByReadKey, getCodeVerifierByWriteKey } from "./db/keystorage";
-import { buildGoogleAuthUrl, cookieOpts } from "./utils";
-import { AuthedRequest, pluginAuthMiddleware } from "./authMiddleware";
-import crypto from "crypto";
+import jwt from "jsonwebtoken";
+import passport from "passport";
+
+import { createKeyPair, writeByWriteKey, readByReadKey } from "./db/keystorage";
+import { findAndConsumeRefreshToken, saveRefreshToken } from "./db/refreshToken";
+import { cookieOpts } from "./utils";
+import "./passport/googleStrategy";
+import "./passport/jwtStrategy";
 
 dotenv.config();
 const app = express();
@@ -18,6 +21,7 @@ const allowedOrigins = [process.env.BACKEND_URL].filter(Boolean) as string[];
 
 app.use(cookieParser());
 app.use(express.json());
+app.use(passport.initialize());
 app.use(
   cors({
     origin: (origin, cb) => {
@@ -28,7 +32,7 @@ app.use(
   }),
 );
 
-app.get("/plugin/ui", (req, res) => {
+app.get("/plugin/ui", (_req, res) => {
   const pluginUiHtml = readFileSync(
     path.join(__dirname, "plugin-ui.html"),
     "utf-8",
@@ -37,95 +41,57 @@ app.get("/plugin/ui", (req, res) => {
   res.send(pluginUiHtml);
 });
 
-app.post("/plugin/keys", (req, res) => {
-  const { codeVerifier } = req.body as { codeVerifier?: string };
-
-  if (!codeVerifier || typeof codeVerifier !== "string" || codeVerifier.length < 43) {
-    return res.status(400).json({ error: "Missing or invalid codeVerifier" });
-  }
-
-  const { readKey, writeKey } = createKeyPair(codeVerifier);
-
+// Создать пару ключей для polling (codeVerifier генерирует Passport в /plugin/auth)
+app.post("/plugin/keys", (_req, res) => {
+  const { readKey, writeKey } = createKeyPair();
   const authUrl =
     process.env.BACKEND_URL +
     "/plugin/auth?state=" +
     encodeURIComponent(writeKey);
-
   res.json({ readKey, authUrl });
 });
 
-app.get("/plugin/auth", (req, res) => {
-  const { state } = req.query;
-
-  if (!state || typeof state !== "string") {
+// Редирект на Google OAuth с PKCE (Passport генерирует code_verifier через StateStore)
+app.get("/plugin/auth", (req, res, next) => {
+  const { state: writeKey } = req.query;
+  if (!writeKey || typeof writeKey !== "string") {
     return res.status(400).send("Missing state");
   }
-
-  const codeVerifier = getCodeVerifierByWriteKey(state);
-  if (!codeVerifier) {
-    return res.status(400).send("Invalid or expired state");
-  }
-
-  const codeChallenge = crypto
-    .createHash("sha256")
-    .update(codeVerifier)
-    .digest("base64url");
-
-  res.cookie("oauth_write_key", state, cookieOpts);
-
-  const googleAuthUrl = buildGoogleAuthUrl(
-    process.env.GOOGLE_REDIRECT_URI_PLUGIN!,
-    state,
-    codeChallenge,
-  );
-  res.redirect(302, googleAuthUrl);
+  res.cookie("oauth_write_key", writeKey, cookieOpts);
+  passport.authenticate("google", {
+    scope: ["email"],
+    session: false,
+  })(req, res, next);
 });
 
-app.get("/plugin/callback", async (req, res) => {
-  const { code, state: rawState } = req.query;
+// Google OAuth callback — Passport обменивает code + code_verifier
+app.get("/plugin/callback", (req, res, next) => {
+  passport.authenticate(
+    "google",
+    { session: false },
+    (err: Error | null, tokens: { accessToken: string; refreshToken: string } | false) => {
+      if (err || !tokens) {
+        console.error("Auth error:", err);
+        return res.status(500).send("Authentication failed");
+      }
 
-  if (!code || typeof code !== "string") {
-    return res.status(400).send("Missing code");
-  }
-  if (!rawState || typeof rawState !== "string") {
-    return res.status(400).send("Missing state");
-  }
-  const state = rawState.trim();
+      const state = req.query.state as string;
+      const written = writeByWriteKey(state, JSON.stringify(tokens));
+      if (!written) {
+        return res.status(400).send("Failed to write auth key");
+      }
 
-  const cookieWriteKey = req.cookies?.oauth_write_key;
-  if (!cookieWriteKey || cookieWriteKey.trim() !== state) {
-    return res.status(400).send("Invalid state");
-  }
-
-  const codeVerifier = getCodeVerifierByWriteKey(state);
-  if (!codeVerifier) {
-    return res.status(400).send("Code verifier not found or expired");
-  }
-
-  try {
-    const { token } = await exchangeCodeAndSign(
-      code,
-      process.env.GOOGLE_REDIRECT_URI_PLUGIN!,
-      codeVerifier,
-    );
-
-    const written = writeByWriteKey(state, JSON.stringify({ token }));
-    if (!written) {
-      return res.status(400).send("Failed to write auth key");
-    }
-
-    const successHtml = readFileSync(
-      path.join(__dirname, "success_auth.html"),
-      "utf-8",
-    );
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(successHtml);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Authentication failed");
-  }
+      const successHtml = readFileSync(
+        path.join(__dirname, "success_auth.html"),
+        "utf-8",
+      );
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(successHtml);
+    },
+  )(req, res, next);
 });
 
+// Polling — ожидание результата авторизации
 app.get("/plugin/poll", (req, res) => {
   const readKey = req.query.readKey;
   if (!readKey || typeof readKey !== "string") {
@@ -143,18 +109,50 @@ app.get("/plugin/poll", (req, res) => {
   }
 
   try {
-    const data = JSON.parse(value) as { token: string };
-    res.json({ token: data.token });
+    const tokens = JSON.parse(value) as { accessToken: string; refreshToken: string };
+    res.json(tokens);
   } catch {
     res.status(500).json({ error: "Invalid stored value" });
   }
 });
 
+// Обновить access token по refresh token (ротация)
+app.post("/auth/refresh", (req, res) => {
+  const { refreshToken } = req.body as { refreshToken?: string };
+  if (!refreshToken || typeof refreshToken !== "string") {
+    return res.status(400).json({ error: "Missing refreshToken" });
+  }
+
+  const row = findAndConsumeRefreshToken(refreshToken);
+  if (!row) {
+    return res.status(401).json({ error: "Invalid or expired refresh token" });
+  }
+
+  const newAccessToken = jwt.sign(
+    { email: row.email },
+    process.env.JWT_SECRET!,
+    { expiresIn: "15m" },
+  );
+  const newRefreshToken = saveRefreshToken(row.email);
+
+  res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
+});
+
+// Logout — инвалидировать refresh token
+app.post("/auth/logout", (req, res) => {
+  const { refreshToken } = req.body as { refreshToken?: string };
+  if (refreshToken && typeof refreshToken === "string") {
+    findAndConsumeRefreshToken(refreshToken); // удалит токен из БД
+  }
+  res.status(204).send();
+});
+
+// Защищённый маршрут — возвращает email из JWT
 app.get(
   "/plugin/me",
-  pluginAuthMiddleware,
-  (req: AuthedRequest, res: express.Response) => {
-    res.json({ email: req.user!.email });
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    res.json({ email: (req.user as { email: string }).email });
   },
 );
 

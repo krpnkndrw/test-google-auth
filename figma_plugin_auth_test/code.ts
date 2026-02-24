@@ -26,20 +26,24 @@ const parentHtml = `<!DOCTYPE html>
 figma.showUI(parentHtml, { width: 400, height: 500 });
 
 (async () => {
-  const token = await figma.clientStorage.getAsync("my-token");
-  console.log("Получил токен из figma.clientStorage");
-  if (token) {
-    figma.ui.postMessage({ type: "token", token });
+  const accessToken = await figma.clientStorage.getAsync("access-token");
+  const refreshToken = await figma.clientStorage.getAsync("refresh-token");
+  if (accessToken) {
+    figma.ui.postMessage({ type: "tokens", accessToken, refreshToken });
   }
 })();
 
-figma.ui.onmessage = (msg: { type?: string; token?: string }) => {
-  console.log("figma.ui.onmessage", msg.type);
-  if (msg.type === "saveToken" && msg.token) {
-    console.log("получаю токен в плагине и ставлю его в figma.clientStorage");
-    figma.clientStorage.setAsync("my-token", msg.token);
+figma.ui.onmessage = (msg: {
+  type?: string;
+  accessToken?: string;
+  refreshToken?: string;
+}) => {
+  if (msg.type === "saveTokens" && msg.accessToken) {
+    figma.clientStorage.setAsync("access-token", msg.accessToken);
+    figma.clientStorage.setAsync("refresh-token", msg.refreshToken ?? "");
   }
   if (msg.type === "logout") {
-    figma.clientStorage.deleteAsync("my-token");
+    figma.clientStorage.deleteAsync("access-token");
+    figma.clientStorage.deleteAsync("refresh-token");
   }
 };

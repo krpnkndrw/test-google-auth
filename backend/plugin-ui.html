@@ -12,17 +12,11 @@
       <button id="btnMe" style="display: none">Юзер</button>
     </div>
     <script>
-      async function generateCodeVerifier() {
-        const array = new Uint8Array(32);
-        crypto.getRandomValues(array);
-        return btoa(String.fromCharCode(...array))
-          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      }
-
       const FIGMA_ORIGIN = "https://www.figma.com";
       const PLUGIN_ID = "1605922465230974720";
 
-      let token = null;
+      let accessToken = null;
+      let refreshToken = null;
       const apiBase = window.location.origin;
 
       const statusEl = document.getElementById("status");
@@ -30,15 +24,16 @@
       const btnLogout = document.getElementById("btnLogout");
       const btnMe = document.getElementById("btnMe");
 
-      function sendTokenToMain(t) {
-        token = t;
+      function setTokens(at, rt) {
+        accessToken = at;
+        refreshToken = rt;
         updateUI();
-        console.log("отправляю токен в плагин");
         window.parent.postMessage(
           {
             pluginMessage: {
-              type: "saveToken",
-              token: t,
+              type: "saveTokens",
+              accessToken: at,
+              refreshToken: rt,
               pluginId: PLUGIN_ID,
             },
           },
@@ -47,7 +42,7 @@
       }
 
       function updateUI() {
-        if (token) {
+        if (accessToken) {
           statusEl.textContent = "Вы авторизованы.";
           btnSignIn.style.display = "none";
           btnLogout.style.display = "inline-block";
@@ -60,27 +55,62 @@
         }
       }
 
+      // Получить сохранённые токены от плагина при старте
       window.addEventListener("message", (event) => {
         const msg = event.data?.fromFigma;
         if (!msg) return;
-        if (msg.type === "token" && msg.token) {
-          console.log("Получил токен от плагина");
-          token = msg.token;
+        if (msg.type === "tokens" && msg.accessToken) {
+          accessToken = msg.accessToken;
+          refreshToken = msg.refreshToken;
           updateUI();
         }
       });
+
+      // Выполнить запрос с автоматическим refresh при 401
+      async function fetchWithRefresh(url, options = {}) {
+        let res = await fetch(url, {
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (res.status === 401 && refreshToken) {
+          const refreshRes = await fetch(apiBase + "/auth/refresh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+          });
+
+          if (refreshRes.ok) {
+            const newTokens = await refreshRes.json();
+            setTokens(newTokens.accessToken, newTokens.refreshToken);
+            // Повторить оригинальный запрос с новым токеном
+            res = await fetch(url, {
+              ...options,
+              headers: {
+                ...(options.headers || {}),
+                Authorization: `Bearer ${accessToken}`,
+              },
+            });
+          } else {
+            // Refresh token невалиден — выйти
+            accessToken = null;
+            refreshToken = null;
+            updateUI();
+          }
+        }
+
+        return res;
+      }
 
       btnSignIn.onclick = async () => {
         statusEl.textContent = "Открытие окна входа…";
         let readKey = null;
 
         try {
-          const codeVerifier = await generateCodeVerifier();
-          const res = await fetch(apiBase + "/plugin/keys", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ codeVerifier }),
-          });
+          const res = await fetch(apiBase + "/plugin/keys", { method: "POST" });
           if (!res.ok) throw new Error("Не удалось получить ключи");
           const { readKey: rk, authUrl } = await res.json();
           readKey = rk;
@@ -91,19 +121,22 @@
           return;
         }
 
-        statusEl.textContent =
-          "Ожидание входа… Залогиньтесь в открывшемся окне.";
+        statusEl.textContent = "Ожидание входа… Залогиньтесь в открывшемся окне.";
         const pollInterval = setInterval(async () => {
           try {
             const res = await fetch(
               apiBase + "/plugin/poll?readKey=" + encodeURIComponent(readKey),
             );
             if (res.status === 204 || res.status === 404) return;
-            if (!res.ok) throw new Error("Ошибка polling");
-            const data = await res.json();
-            if (data.token) {
+            if (!res.ok) {
               clearInterval(pollInterval);
-              sendTokenToMain(data.token);
+              statusEl.textContent = "Ошибка polling.";
+              return;
+            }
+            const data = await res.json();
+            if (data.accessToken) {
+              clearInterval(pollInterval);
+              setTokens(data.accessToken, data.refreshToken);
               statusEl.textContent = "Готово. Можно закрыть окно входа.";
             }
           } catch (e) {
@@ -111,20 +144,25 @@
           }
         }, 1500);
 
-        setTimeout(
-          () => {
-            clearInterval(pollInterval);
-            if (!token) {
-              statusEl.textContent = "Войдите через Google.";
-              updateUI();
-            }
-          },
-          10 * 60 * 1000,
-        );
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          if (!accessToken) {
+            statusEl.textContent = "Войдите через Google.";
+            updateUI();
+          }
+        }, 10 * 60 * 1000);
       };
 
-      btnLogout.onclick = () => {
-        token = null;
+      btnLogout.onclick = async () => {
+        if (refreshToken) {
+          await fetch(apiBase + "/auth/logout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+          }).catch(() => {});
+        }
+        accessToken = null;
+        refreshToken = null;
         updateUI();
         window.parent.postMessage(
           {
@@ -138,19 +176,17 @@
       };
 
       btnMe.onclick = async () => {
-        const response = await fetch(apiBase + "/plugin/me", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const data = await response.json();
-        statusEl.textContent = "Юзер: " + data.email;
+        try {
+          const response = await fetchWithRefresh(apiBase + "/plugin/me");
+          const data = await response.json();
+          statusEl.textContent = "Юзер: " + data.email;
+        } catch (e) {
+          statusEl.textContent = "Ошибка: " + (e.message || "сеть");
+        }
       };
-      statusEl.textContent = "Загрузка…";
 
       setTimeout(() => {
-        if (!token) statusEl.textContent = "Войдите через Google.";
+        if (!accessToken) statusEl.textContent = "Войдите через Google.";
         updateUI();
       }, 300);
     </script>

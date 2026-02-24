@@ -5,7 +5,7 @@ const TTL_MS = 10 * 60 * 1000; // 10 минут
 
 const insertStmt = db.prepare(`
   INSERT INTO plugin_auth_keys (read_key, write_key, code_verifier, value, created_at)
-  VALUES (?, ?, ?, NULL, ?)
+  VALUES (?, ?, NULL, NULL, ?)
 `);
 
 const selectByWriteKeyStmt = db.prepare(`
@@ -34,16 +34,24 @@ const selectCodeVerifierByWriteKeyStmt = db.prepare(`
   SELECT code_verifier, created_at FROM plugin_auth_keys WHERE write_key = ?
 `);
 
+const updateCodeVerifierStmt = db.prepare(`
+  UPDATE plugin_auth_keys SET code_verifier = ? WHERE write_key = ?
+`);
+
 const deleteExpiredStmt = db.prepare(`
   DELETE FROM plugin_auth_keys WHERE created_at < ?
 `);
 
-export function createKeyPair(codeVerifier: string): { readKey: string; writeKey: string } {
+export function createKeyPair(): { readKey: string; writeKey: string } {
   deleteExpiredStmt.run(Date.now() - TTL_MS);
   const readKey = crypto.randomBytes(32).toString("hex");
   const writeKey = crypto.randomBytes(32).toString("hex");
-  insertStmt.run(readKey, writeKey, codeVerifier, Date.now());
+  insertStmt.run(readKey, writeKey, Date.now());
   return { readKey, writeKey };
+}
+
+export function storeCodeVerifier(writeKey: string, codeVerifier: string): void {
+  updateCodeVerifierStmt.run(codeVerifier, writeKey);
 }
 
 export function writeByWriteKey(writeKey: string, value: string): boolean {
