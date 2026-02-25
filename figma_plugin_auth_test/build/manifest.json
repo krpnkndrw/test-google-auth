@@ -2,7 +2,7 @@
   "name": "figma_plugin_auth_test",
   "id": "1605922465230974720",
   "api": "1.0.0",
-  "main": "code.js",
+  "main": "plugin.js",
   "capabilities": [],
   "enableProposedApi": false,
   "documentAccess": "dynamic-page",

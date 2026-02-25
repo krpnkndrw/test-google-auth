@@ -182,6 +182,7 @@
       btnMe.onclick = async () => {
         try {
           const response = await fetchWithRefresh(apiBase + "/plugin/me");
+          if (!response.ok) throw new Error("Ошибка: не авторизован");
           const data = await response.json();
           statusEl.textContent = "Юзер: " + data.email;
         } catch (e) {

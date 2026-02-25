@@ -7,5 +7,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["*.ts", "db/keystorage.ts", "db/db.ts"]
+  "include": ["*.ts", "db/keystorage.ts", "db/db.ts", "src/server.ts", "src/utils.ts"]
 }

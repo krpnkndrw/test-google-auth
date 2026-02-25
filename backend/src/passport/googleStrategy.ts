@@ -18,11 +18,11 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: process.env.GOOGLE_REDIRECT_URI_PLUGIN!,
+      callbackURL: process.env.GOOGLE_REDIRECT_URI!,
       pkce: true,
       state: true,
       store: new KeyStorageStateStore(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any,
     async (_accessToken, _refreshToken, profile, done) => {
       try {
@@ -31,11 +31,9 @@ passport.use(
           return done(new Error("No email in Google profile"));
         }
 
-        const ourAccessToken = jwt.sign(
-          { email },
-          process.env.JWT_SECRET!,
-          { expiresIn: "15m" },
-        );
+        const ourAccessToken = jwt.sign({ email }, process.env.JWT_SECRET!, {
+          expiresIn: "15m",
+        });
 
         const ourRefreshToken = saveRefreshToken(email);
 

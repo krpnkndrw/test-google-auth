@@ -23,7 +23,7 @@ const app = express();
 const port = Number(process.env.PORT) || 3000;
 
 const allowedOrigins = [process.env.BACKEND_URL].filter(Boolean) as string[];
-const htmlDir = path.join(process.cwd(), "html");
+const htmlDir = path.join(process.cwd(), "src/html");
 
 app.use(cookieParser());
 app.use(express.json());
