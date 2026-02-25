@@ -8,8 +8,8 @@ import {
   findAndConsumeRefreshToken,
   saveRefreshToken,
 } from "./db/refreshToken";
-import "../passport/googleStrategy";
-import "../passport/jwtStrategy";
+import "./passport/googleStrategy";
+import "./passport/jwtStrategy";
 import { allowedOrigins, htmlDir } from "../utils";
 import { cookieOpts } from "./utils";
 
@@ -66,8 +66,12 @@ auth.get("/callback", (req, res, next) => {
         return res.status(400).send("Failed to write auth key");
       }
 
+      // const successHtml = readFileSync(
+      //   path.join(htmlDir, "success_auth.html"),
+      //   "utf-8",
+      // );
       const successHtml = readFileSync(
-        path.join(htmlDir, "success_auth.html"),
+        path.join(__dirname, "success_auth.html"),
         "utf-8",
       );
       res.setHeader("Content-Type", "text/html; charset=utf-8");
