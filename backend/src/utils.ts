@@ -1,7 +1,4 @@
-export const cookieOpts = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-  maxAge: 10 * 60 * 1000, // 10 минут
-};
+import path from "path";
+
+export const htmlDir = path.join(process.cwd(), "src/html");
+export const allowedOrigins = [process.env.BACKEND_URL];

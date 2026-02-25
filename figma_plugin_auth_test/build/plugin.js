@@ -28,10 +28,10 @@
     });
   };
 
-  // iframeWrapper.ts
+  // src/iframeWrapper.ts
   var pluginUiUrl, pluginOrigin, iframeWrapper;
   var init_iframeWrapper = __esm({
-    "iframeWrapper.ts"() {
+    "src/iframeWrapper.ts"() {
       "use strict";
       pluginUiUrl = "http://localhost:3000/plugin/ui";
       pluginOrigin = "http://localhost:3000";
@@ -59,9 +59,9 @@
     }
   });
 
-  // plugin.ts
+  // src/plugin.ts
   var require_plugin = __commonJS({
-    "plugin.ts"(exports) {
+    "src/plugin.ts"(exports) {
       init_iframeWrapper();
       figma.showUI(iframeWrapper, { width: 400, height: 500 });
       (() => __async(null, null, function* () {

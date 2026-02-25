@@ -1,5 +1,5 @@
 import { Request } from "express";
-import { storeCodeVerifier, getCodeVerifierByWriteKey } from "../db/keystorage";
+import { storeCodeVerifier, getCodeVerifierByWriteKey } from "../db/keyStorage";
 
 interface StoreMeta {
   [key: string]: unknown;
