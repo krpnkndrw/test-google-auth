@@ -10,7 +10,7 @@ import {
 } from "./db/refreshToken";
 import "./passport/googleStrategy";
 import "./passport/jwtStrategy";
-import { allowedOrigins, htmlDir } from "../utils";
+import { allowedOrigins } from "../utils";
 import { cookieOpts } from "./utils";
 
 const auth = express.Router();
@@ -49,6 +49,7 @@ auth.get("/callback", (req, res, next) => {
     ) => {
       if (err || !tokens) {
         console.error("Auth error:", err?.message ?? err);
+
         if (!tokens && !err) {
           console.error(
             "Auth failed: no tokens (possible state/cookie mismatch). Cookie present:",
@@ -66,14 +67,11 @@ auth.get("/callback", (req, res, next) => {
         return res.status(400).send("Failed to write auth key");
       }
 
-      // const successHtml = readFileSync(
-      //   path.join(htmlDir, "success_auth.html"),
-      //   "utf-8",
-      // );
       const successHtml = readFileSync(
         path.join(__dirname, "success_auth.html"),
         "utf-8",
       );
+
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.send(successHtml);
     },
