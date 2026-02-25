@@ -11,14 +11,19 @@ import jwt from "jsonwebtoken";
 import passport from "passport";
 
 import { createKeyPair, writeByWriteKey, readByReadKey } from "./db/keystorage";
-import { findAndConsumeRefreshToken, saveRefreshToken } from "./db/refreshToken";
+import {
+  findAndConsumeRefreshToken,
+  saveRefreshToken,
+} from "./db/refreshToken";
 import { cookieOpts } from "./utils";
 import "./passport/googleStrategy";
 import "./passport/jwtStrategy";
+
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
 const allowedOrigins = [process.env.BACKEND_URL].filter(Boolean) as string[];
+const htmlDir = path.join(process.cwd(), "html");
 
 app.use(cookieParser());
 app.use(express.json());
@@ -35,25 +40,25 @@ app.use(
 
 app.get("/plugin/ui", (_req, res) => {
   const pluginUiHtml = readFileSync(
-    path.join(__dirname, "plugin-ui.html"),
+    path.join(htmlDir, "plugin-ui.html"),
     "utf-8",
   );
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(pluginUiHtml);
 });
 
-// Создать пару ключей для polling (codeVerifier генерирует Passport в /plugin/auth)
-app.post("/plugin/keys", (_req, res) => {
+// Создать пару ключей для polling (codeVerifier генерирует Passport в /auth/redirect)
+app.post("/auth/login", (_req, res) => {
   const { readKey, writeKey } = createKeyPair();
   const authUrl =
     process.env.BACKEND_URL +
-    "/plugin/auth?state=" +
+    "/auth/redirect?state=" +
     encodeURIComponent(writeKey);
   res.json({ readKey, authUrl });
 });
 
 // Редирект на Google OAuth с PKCE (Passport генерирует code_verifier через StateStore)
-app.get("/plugin/auth", (req, res, next) => {
+app.get("/auth/redirect", (req, res, next) => {
   const { state: writeKey } = req.query;
   if (!writeKey || typeof writeKey !== "string") {
     return res.status(400).send("Missing state");
@@ -66,15 +71,23 @@ app.get("/plugin/auth", (req, res, next) => {
 });
 
 // Google OAuth callback — Passport обменивает code + code_verifier
-app.get("/plugin/callback", (req, res, next) => {
+app.get("/auth/callback", (req, res, next) => {
   passport.authenticate(
     "google",
     { session: false },
-    (err: Error | null, tokens: { accessToken: string; refreshToken: string } | false) => {
+    (
+      err: Error | null,
+      tokens: { accessToken: string; refreshToken: string } | false,
+    ) => {
       if (err || !tokens) {
         console.error("Auth error:", err?.message ?? err);
         if (!tokens && !err) {
-          console.error("Auth failed: no tokens (possible state/cookie mismatch). Cookie present:", !!req.cookies?.oauth_write_key, "query.state:", !!req.query.state);
+          console.error(
+            "Auth failed: no tokens (possible state/cookie mismatch). Cookie present:",
+            !!req.cookies?.oauth_write_key,
+            "query.state:",
+            !!req.query.state,
+          );
         }
         return res.status(500).send("Authentication failed");
       }
@@ -86,7 +99,7 @@ app.get("/plugin/callback", (req, res, next) => {
       }
 
       const successHtml = readFileSync(
-        path.join(__dirname, "success_auth.html"),
+        path.join(htmlDir, "success_auth.html"),
         "utf-8",
       );
       res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -96,7 +109,7 @@ app.get("/plugin/callback", (req, res, next) => {
 });
 
 // Polling — ожидание результата авторизации
-app.get("/plugin/poll", (req, res) => {
+app.get("/auth/poll", (req, res) => {
   const readKey = req.query.readKey;
   if (!readKey || typeof readKey !== "string") {
     return res.status(400).json({ error: "Missing readKey" });
@@ -113,7 +126,10 @@ app.get("/plugin/poll", (req, res) => {
   }
 
   try {
-    const tokens = JSON.parse(value) as { accessToken: string; refreshToken: string };
+    const tokens = JSON.parse(value) as {
+      accessToken: string;
+      refreshToken: string;
+    };
     res.json(tokens);
   } catch {
     res.status(500).json({ error: "Invalid stored value" });

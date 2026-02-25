@@ -6,7 +6,7 @@ interface StoreMeta {
 }
 
 export class KeyStorageStateStore {
-  // Вызывается при построении URL авторизации (/plugin/auth).
+  // Вызывается при построении URL авторизации (/auth/redirect).
   // passport-oauth2 при PKCE передаёт: store(req, verifier, state, meta, callback)
   // — второй аргумент это строка code_verifier, не объект.
   store(
@@ -33,11 +33,20 @@ export class KeyStorageStateStore {
     req: Request,
     providedState: string,
     _meta: StoreMeta,
-    callback: (err: Error | null, ok: boolean | string, state?: unknown) => void,
+    callback: (
+      err: Error | null,
+      ok: boolean | string,
+      state?: unknown,
+    ) => void,
   ): void {
     const cookieKey = req.cookies?.oauth_write_key as string | undefined;
     if (!cookieKey || cookieKey.trim() !== providedState) {
-      console.error("State verify failed: cookie present:", !!cookieKey, "cookie===state:", cookieKey?.trim() === providedState?.trim());
+      console.error(
+        "State verify failed: cookie present:",
+        !!cookieKey,
+        "cookie===state:",
+        cookieKey?.trim() === providedState?.trim(),
+      );
       return callback(null, false);
     }
     const codeVerifier = getCodeVerifierByWriteKey(providedState);

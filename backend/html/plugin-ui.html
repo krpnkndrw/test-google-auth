@@ -110,7 +110,7 @@
         let readKey = null;
 
         try {
-          const res = await fetch(apiBase + "/plugin/keys", { method: "POST" });
+          const res = await fetch(apiBase + "/auth/login", { method: "POST" });
           if (!res.ok) throw new Error("Не удалось получить ключи");
           const { readKey: rk, authUrl } = await res.json();
           readKey = rk;
@@ -126,7 +126,7 @@
         const pollInterval = setInterval(async () => {
           try {
             const res = await fetch(
-              apiBase + "/plugin/poll?readKey=" + encodeURIComponent(readKey),
+              apiBase + "/auth/poll?readKey=" + encodeURIComponent(readKey),
             );
             if (res.status === 204 || res.status === 404) return;
             if (!res.ok) {
